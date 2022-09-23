@@ -15,6 +15,14 @@ On the script, you shall fill this variables:
 - AWS_PROFILE: AWS profile used to gather secret info from secret manager
 - AWS_REGION: AWS region where we are going to search those secrets
 
+### Slack APP
+
+To be able to send the message via slack, you will require the next scope permissions on "Bot scope":
+- `im:write`
+- `mpim:write`
+- `users:read`
+- `users:read:email`
+
 ## Usage
 
 I'll show usage via examples:
