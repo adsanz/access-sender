@@ -107,6 +107,10 @@ password: xxxx
 username: xxxxx
 ```
 
+### Note 
+
+If you don't require slack, or OTS because you need only a secret-retrieval tool from AWS just fill AWS_REGION and AWS_PROFILE variables, or if you want to gather and create the secret on OTS fill up the AWS vars + TOKEN_OTS & EMAIL_OTS vars.
+
 ## Features
 
 PR's are welcome!
