@@ -25,6 +25,14 @@ def SecretReader(sm,secret_name):
     secret = sm.get_secret_value(SecretId=secret_name)
     return yaml.dump(json.loads(secret['SecretString']), default_flow_style=False)
 
+def SecretLister(sm):
+    """
+    List secrets
+    """
+    secrets = sm.list_secrets()
+    return yaml.dump(secrets['SecretList'], default_flow_style=False)
+    #return secrets['SecretList']
+
 def OneTimeSecretCreate(secret,api_token, user):
     """
     Create and print secret creation, return secret key
@@ -61,15 +69,43 @@ def SlackMessage(token,user_id,message,secret_key):
     response = requests.post('https://slack.com/api/chat.postMessage', json=payload, headers=headers)
     return response.json()
 
+def Str2Bool(v):
+    """
+    Helper function to allow boolean values for secret listing arg. I should upgrade to 3.9 to use: parser.add_argument('--feature', action=argparse.BooleanOptionalAction)
+    """
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 
 parser = argparse.ArgumentParser(description='This script will create a secret in OneTimeSecret and send it to a user via Slack if email is provided')
 parser.add_argument('-s','--secret', help='Secret to be send (do not use -n and -s at the same time)', required=False)
 parser.add_argument('-n','--name', help='Secret name from AWS (name of the to be retrieved)', required=False)
 parser.add_argument('-u','--user', help='Email for the user where we are going to send the secret', required=False)
-parser.add_argument('-m','--message', help='Message to be sent', required=True)
+parser.add_argument('-m','--message', help='Message to be sent', required=False)
+parser.add_argument('-slk','--secret-lookup', help='Just get and print a secret', required=False)
+parser.add_argument('-sls','--secret-list', help='If set it will list all secrets defined on the script regiion', required=False, type=Str2Bool, nargs='?', const=True, default=False)
 args = vars(parser.parse_args())
 
 logging.debug(args)
+
+if args['secret_lookup']:
+    secret_name = args['secret_lookup']
+    logging.info('Reading secret: '+secret_name)
+    secret = SecretReader(sm,secret_name)
+    logging.info('Secret details: \n'+secret)
+    exit(0)
+
+if args['secret_list']:
+    secret = SecretLister(sm)
+    logging.info(secret)
+    exit(0)
 
 if args['name']:
     secret_name = args['name']
