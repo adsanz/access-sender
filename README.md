@@ -74,23 +74,12 @@ I've also added two extra features to help with secret gathering, or if you just
 
 ```log
 ❯ python3 access-sender.py --secret-list
-27-Sep-22 16:24:49 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
-27-Sep-22 16:24:51 - INFO - - ARN: arn:aws:secretsmanager:xxx-xxx-xxxx:xxxxx:secret:xxxxx-xxxx-xxxxxxx
-  CreatedDate: 2021-09-08 16:04:44.026000+02:00
-  Description: Access to xxxx xxxxx
-  KmsKeyId: arn:aws:kms:xxx-xxx-xxxx:xxxxxx:key/xx-xxx-xx-xx-xxxx
-  LastAccessedDate: 2022-09-27 02:00:00+02:00
-  LastChangedDate: 2022-09-22 12:35:54.059000+02:00
-  Name: xxxx-xxxx
-  RotationEnabled: xxxx
-  RotationLambdaARN: arn:aws:lambda:xxx-xxx-xxxx:xxxx:function:xxxx-xxx-xxxx-xxxx
-  RotationRules:
-    AutomaticallyAfterDays: 60
-  SecretVersionsToStages:
-    xxxx-xx-xx-xx-xx:
-    - AWSPENDING
-    xxxxx-xxx-xx-xxxx-xxxxx:
-    - AWSCURRENT
+30-Sep-22 16:44:54 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+30-Sep-22 16:44:56 - INFO - 
+xxx-xxxxx-xx: xxxxx secret key
+xxx-xxx: beta xxx xxxxx key
+xxx-xxx: xxxx auth xxx for xxxx
+
 ```
 
 6. Get the value of a secret

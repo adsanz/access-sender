@@ -7,8 +7,9 @@ from requests.auth import HTTPBasicAuth
 TOKEN_OTS='PLACEHOLDER'
 EMAIL_OTS='PLACEHOLDER'
 TOKEN_SLACK='PLACEHOLDER'
-AWS_PROFILE='PLACEHOLDER'
-AWS_REGION='PLACEHOLDER'
+AWS_PROFILE='leo'
+AWS_REGION='us-west-2'
+MAX_RESULTS=20
 
 # Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
@@ -27,11 +28,24 @@ def SecretReader(sm,secret_name):
 
 def SecretLister(sm):
     """
-    List secrets
+    List secrets.
     """
-    secrets = sm.list_secrets()
-    return yaml.dump(secrets['SecretList'], default_flow_style=False)
-    #return secrets['SecretList']
+    secret_list = {}
+    secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
+    next_token = secrets['NextToken']
+    while next_token != None:
+        for secret in secrets['SecretList']:
+            try:
+                description = secret['Description']
+            except KeyError:
+                description = 'None'
+            secret_list[secret['Name']] = description.strip()
+        secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
+        try:
+            next_token = secrets['NextToken']
+        except KeyError:
+            next_token = None
+    return yaml.dump(secret_list, default_flow_style=False)
 
 def OneTimeSecretCreate(secret,api_token, user):
     """
@@ -89,8 +103,8 @@ parser.add_argument('-s','--secret', help='Secret to be send (do not use -n and 
 parser.add_argument('-n','--name', help='Secret name from AWS (name of the to be retrieved)', required=False)
 parser.add_argument('-u','--user', help='Email for the user where we are going to send the secret', required=False)
 parser.add_argument('-m','--message', help='Message to be sent', required=False)
-parser.add_argument('-slk','--secret-lookup', help='Just get and print a secret', required=False)
-parser.add_argument('-sls','--secret-list', help='If set it will list all secrets defined on the script regiion', required=False, type=Str2Bool, nargs='?', const=True, default=False)
+parser.add_argument('-slk','--secret-lookup', help='Input the name of a secret to get its data', required=False)
+parser.add_argument('-sls','--secret-list', help='If set it will list all secrets defined on the script region', required=False, type=Str2Bool, nargs='?', const=True, default=False)
 args = vars(parser.parse_args())
 
 logging.debug(args)
@@ -104,7 +118,7 @@ if args['secret_lookup']:
 
 if args['secret_list']:
     secret = SecretLister(sm)
-    logging.info(secret)
+    logging.info('\n'+secret)
     exit(0)
 
 if args['name']:
