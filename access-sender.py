@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+1#!/usr/bin/python3
 
 
 import boto3, yaml, json, requests, argparse, logging
@@ -7,8 +7,8 @@ from requests.auth import HTTPBasicAuth
 TOKEN_OTS='PLACEHOLDER'
 EMAIL_OTS='PLACEHOLDER'
 TOKEN_SLACK='PLACEHOLDER'
-AWS_PROFILE='leo'
-AWS_REGION='us-west-2'
+AWS_PROFILE='PLACEHOLDER'
+AWS_REGION='PLACEHOLDER'
 MAX_RESULTS=20
 
 # Logger
@@ -26,25 +26,46 @@ def SecretReader(sm,secret_name):
     secret = sm.get_secret_value(SecretId=secret_name)
     return yaml.dump(json.loads(secret['SecretString']), default_flow_style=False)
 
+def SecretDumper(sm,secrets,secret_list):
+    """
+    Dump secrets
+    """
+    for secret in secrets['SecretList']:
+        try:
+            description = secret['Description']
+        except KeyError:
+            description = 'None'
+        secret_list[secret['Name']] = description.strip()
+    return secret_list
+
+def merge_two_dicts(x, y):
+    # https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression
+    z = x.copy()   # start with keys and values of x
+    z.update(y)    # modifies z with keys and values of y
+    return z
+
 def SecretLister(sm):
     """
     List secrets.
     """
     secret_list = {}
     secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
-    next_token = secrets['NextToken']
-    while next_token != None:
-        for secret in secrets['SecretList']:
+    try:
+        next_token = secrets['NextToken']
+    except KeyError:
+        next_token = None
+    if next_token != None:
+        while next_token != None:
+            secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
+            secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
             try:
-                description = secret['Description']
+                next_token = secrets['NextToken']
             except KeyError:
-                description = 'None'
-            secret_list[secret['Name']] = description.strip()
+                next_token = None
+    else:
         secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
-        try:
-            next_token = secrets['NextToken']
-        except KeyError:
-            next_token = None
+        secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
+
     return yaml.dump(secret_list, default_flow_style=False)
 
 def OneTimeSecretCreate(secret,api_token, user):
