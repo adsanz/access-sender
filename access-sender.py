@@ -1,4 +1,4 @@
-1#!/usr/bin/python3
+#!/usr/bin/python3
 
 
 import boto3, yaml, json, requests, argparse, logging
