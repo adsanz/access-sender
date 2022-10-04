@@ -12,7 +12,7 @@ AWS_REGION='PLACEHOLDER'
 MAX_RESULTS=20
 
 # Logger
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 
 # boto secret manager client with profile
 session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
@@ -139,7 +139,8 @@ if args['secret_lookup']:
 
 if args['secret_list']:
     secret = SecretLister(sm)
-    logging.info('\n'+secret)
+    for key, value in yaml.load(secret, Loader=yaml.FullLoader).items():
+        logging.info('Secret: '+key+' Description: '+value)
     exit(0)
 
 if args['name']:
