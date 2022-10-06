@@ -7,8 +7,8 @@ from requests.auth import HTTPBasicAuth
 TOKEN_OTS='PLACEHOLDER'
 EMAIL_OTS='PLACEHOLDER'
 TOKEN_SLACK='PLACEHOLDER'
-AWS_PROFILE='PLACEHOLDER'
-AWS_REGION='PLACEHOLDER'
+AWS_PROFILE='mrmilu'
+AWS_REGION='eu-west-3'
 MAX_RESULTS=20
 
 # Logger
@@ -56,14 +56,15 @@ def SecretLister(sm):
         next_token = None
     if next_token != None:
         while next_token != None:
-            secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
-            secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
             try:
+                secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
                 next_token = secrets['NextToken']
-            except KeyError:
+            except:
+                secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
                 next_token = None
+            secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
     else:
-        secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
+        secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
         secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
 
     return yaml.dump(secret_list, default_flow_style=False)
