@@ -41,7 +41,11 @@ def SecretReader(sm,secret_name):
     """
     Return in a nicely yaml format the secret
     """
-    secret = sm.get_secret_value(SecretId=secret_name)
+    try:
+        secret = sm.get_secret_value(SecretId=secret_name)
+    except:
+        log.exception('[red]Secret not found[/]', extra={"markup": True})
+        exit(1)
     return yaml.dump(json.loads(secret['SecretString']), default_flow_style=False)
 
 def SecretDumper(sm,secrets,secret_list):
@@ -67,23 +71,28 @@ def SecretLister(sm):
     List secrets.
     """
     secret_list = {}
-    secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
     try:
-        next_token = secrets['NextToken']
-    except KeyError:
-        next_token = None
-    if next_token != None:
-        while next_token != None:
+        with Console().status("[bold green]Listing secrets...[/]", spinner="dots"):
+            secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
             try:
-                secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
                 next_token = secrets['NextToken']
-            except:
-                secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
+            except KeyError:
                 next_token = None
-            secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
-    else:
-        secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
-        secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
+            if next_token != None:
+                while next_token != None:
+                    try:
+                        secrets = sm.list_secrets(MaxResults=MAX_RESULTS, NextToken=next_token)
+                        next_token = secrets['NextToken']
+                    except:
+                        secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
+                        next_token = None
+                    secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
+            else:
+                secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
+                secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
+    except:
+        log.exception('[red]Error listing secrets[/]', extra={"markup": True})
+        exit(1)
     return yaml.dump(secret_list, default_flow_style=False)
 
 
@@ -91,13 +100,17 @@ def OneTimeSecretCreate(secret,api_token, user):
     """
     Create and print secret creation, return secret key
     """
-    with Console().status("[bold green]Creating secret...[/]", spinner="dots"):
-        req = requests.post('https://onetimesecret.com/api/v1/share', 
-        auth=HTTPBasicAuth(user, api_token),
-        data={
-            'secret': secret,
-            'ttl': 604800,})
-    return req.json()['secret_key']
+    try:
+        with Console().status("[bold green]Creating secret...[/]", spinner="dots"):
+            response = requests.post('https://onetimesecret.com/api/v1/share', 
+            auth=HTTPBasicAuth(user, api_token),
+            data={
+                'secret': secret,
+                'ttl': 604800,})
+    except:
+        log.exception('[red]Error creating secret[/]', extra={"markup": True})
+        exit(1)
+    return response.json()['secret_key']
 
 def SlackUserLookup(token,user):
     """
@@ -107,7 +120,12 @@ def SlackUserLookup(token,user):
     payload = {
         "email": user
     }
-    response = requests.post('https://slack.com/api/users.lookupByEmail', data=payload, headers=headers)
+    try:
+        with Console().status("[bold green]Looking up user...[/]", spinner="dots"):
+            response = requests.post('https://slack.com/api/users.lookupByEmail', data=payload, headers=headers)
+    except:
+        log.exception('[red]Error looking up user[/]', extra={"markup": True})
+        exit(1)
     return response.json()['user']['id']
 
 def SlackMessage(token,user_id,message,secret_key):
@@ -120,7 +138,12 @@ def SlackMessage(token,user_id,message,secret_key):
         "text": message+'https://onetimesecret.com/secret/'+secret_key,
         "as_user": True
     }
-    response = requests.post('https://slack.com/api/chat.postMessage', json=payload, headers=headers)
+    try:
+        with Console().status("[bold green]Sending message...[/]", spinner="dots"):
+            response = requests.post('https://slack.com/api/chat.postMessage', json=payload, headers=headers)
+    except:
+        log.exception('[red]Error sending message to slack.[/] Make sure you have set-up [code]TOKEN_SLACK[/]', extra={"markup": True})
+        exit(1)
     return response.json()
 
 def Str2Bool(v):
@@ -155,13 +178,10 @@ def main():
     if args['secret_lookup']:
         secret_name = args['secret_lookup']
         log.info('[green]Reading secret: [/][bold yellow underline]{}[/]'.format(secret_name), extra={"markup": True})
-        try:
-            secret = SecretReader(sm,secret_name)
-            log.info('[green dim]Secret details: [/]\n[green bold on black]{}[/]'.format(secret), extra={"markup": True})
-            exit(0)
-        except:
-            log.error('[red]Secret not found[/]', extra={"markup": True})
-            exit(1)
+        secret = SecretReader(sm,secret_name)
+        log.info('[green dim]Secret details: [/]\n[green bold on black]{}[/]'.format(secret), extra={"markup": True})
+        exit(0)
+
 
     if args['secret_list']:
         with Console().status("[bold green]Getting secrets...[/]", spinner="dots"):        
@@ -198,11 +218,7 @@ def main():
     if args['user']:
         user_id = SlackUserLookup(TOKEN_SLACK,args['user'])
         log.info('[dim green]User id:[/] [dim yellow bold underline]]{}[/] [dim green]from user:[/] [bold yellow underline]{}[/]'.format(user_id,args['user']), extra={"markup": True})
-        try:
-            SlackMessage(TOKEN_SLACK,user_id,args['message'],secret_key)
-        except:
-            log.exception('[red]Error sending message to slack.[/] Make sure you have set-up [code]TOKEN_SLACK[/]', extra={"markup": True})
-            exit(1)
+        SlackMessage(TOKEN_SLACK,user_id,args['message'],secret_key)
         log.info('[green]Slack message sent to user:[/] [green bold underline]{}[/]'.format(args['user']), extra={"markup": True})
 
 
