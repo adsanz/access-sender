@@ -3,16 +3,35 @@
 
 import boto3, yaml, json, requests, argparse, logging
 from requests.auth import HTTPBasicAuth
+from rich.logging import RichHandler
+from rich.console import Console
 
-TOKEN_OTS='PLACEHOLDER'
-EMAIL_OTS='PLACEHOLDER'
-TOKEN_SLACK='PLACEHOLDER'
-AWS_PROFILE='mrmilu'
-AWS_REGION='eu-west-3'
+TOKEN_OTS= None
+EMAIL_OTS=None
+TOKEN_SLACK=None
+AWS_PROFILE=None
+AWS_REGION=None
 MAX_RESULTS=20
 
+
 # Logger
-logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level=logging.INFO, format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)]
+)
+
+log = logging.getLogger("rich")
+
+log.debug("[dim green underline]Current vars set: [/]", extra={"markup": True})
+log.debug('[dim bold underline]AWS[/]', extra={"markup": True})
+log.debug('[dim]AWS_PROFILE:[/] [underline dim yellow]{}[/]'.format(AWS_PROFILE), extra={"markup": True})
+log.debug('[dim]AWS_REGION:[/] [underline dim yellow]{}[/]'.format(AWS_REGION), extra={"markup": True})
+log.debug('[dim]MAX_RESULTS:[/] [underline dim yellow]{}[/]'.format(MAX_RESULTS), extra={"markup": True})
+log.debug('[dim bold underline]SLACK[/]', extra={"markup": True})
+log.debug('[dim]TOKEN_SLACK:[/] [underline dim yellow]{}[/]'.format(TOKEN_SLACK), extra={"markup": True})
+log.debug('[dim bold underline]ONE TIME SECRET[/]', extra={"markup": True})
+log.debug('[dim]EMAIL_OTS:[/] [underline dim yellow]{}[/]'.format(EMAIL_OTS), extra={"markup": True})
+log.debug('[dim]TOKEN_OTS:[/] [underline dim yellow]{}[/]'.format(TOKEN_OTS), extra={"markup": True})
 
 # boto secret manager client with profile
 session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
@@ -22,7 +41,6 @@ def SecretReader(sm,secret_name):
     """
     Return in a nicely yaml format the secret
     """
-
     secret = sm.get_secret_value(SecretId=secret_name)
     return yaml.dump(json.loads(secret['SecretString']), default_flow_style=False)
 
@@ -66,19 +84,19 @@ def SecretLister(sm):
     else:
         secrets = sm.list_secrets(MaxResults=MAX_RESULTS)
         secret_list = merge_two_dicts(secret_list,SecretDumper(sm,secrets,secret_list))
-
     return yaml.dump(secret_list, default_flow_style=False)
+
 
 def OneTimeSecretCreate(secret,api_token, user):
     """
     Create and print secret creation, return secret key
     """
-    req = requests.post('https://onetimesecret.com/api/v1/share', 
-    auth=HTTPBasicAuth(user, api_token),
-    data={
-        'secret': secret,
-        'ttl': 604800,})
-    logging.debug(yaml.dump(req.json(), default_flow_style=False))
+    with Console().status("[bold green]Creating secret...[/]", spinner="dots"):
+        req = requests.post('https://onetimesecret.com/api/v1/share', 
+        auth=HTTPBasicAuth(user, api_token),
+        data={
+            'secret': secret,
+            'ttl': 604800,})
     return req.json()['secret_key']
 
 def SlackUserLookup(token,user):
@@ -119,7 +137,6 @@ def Str2Bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
-
 parser = argparse.ArgumentParser(description='This script will create a secret in OneTimeSecret and send it to a user via Slack if email is provided')
 parser.add_argument('-s','--secret', help='Secret to be send (do not use -n and -s at the same time)', required=False)
 parser.add_argument('-n','--name', help='Secret name from AWS (name of the to be retrieved)', required=False)
@@ -129,43 +146,65 @@ parser.add_argument('-slk','--secret-lookup', help='Input the name of a secret t
 parser.add_argument('-sls','--secret-list', help='If set it will list all secrets defined on the script region', required=False, type=Str2Bool, nargs='?', const=True, default=False)
 args = vars(parser.parse_args())
 
-logging.debug(args)
+log.info("[dim green underline]Current arguments for the script: [/]", extra={"markup": True})
+for key, value in args.items():
+    log.info('[dim]{}:[/] [underline dim yellow]{}[/]'.format(key,value), extra={"markup": True})
 
-if args['secret_lookup']:
-    secret_name = args['secret_lookup']
-    logging.info('Reading secret: '+secret_name)
-    secret = SecretReader(sm,secret_name)
-    logging.info('Secret details: \n'+secret)
-    exit(0)
+def main():
+    log.info("[dim green underline]Starting script...[/]", extra={"markup": True})
+    if args['secret_lookup']:
+        secret_name = args['secret_lookup']
+        log.info('[green]Reading secret: [/][bold yellow underline]{}[/]'.format(secret_name), extra={"markup": True})
+        try:
+            secret = SecretReader(sm,secret_name)
+            log.info('[green dim]Secret details: [/]\n[green bold on black]{}[/]'.format(secret), extra={"markup": True})
+            exit(0)
+        except:
+            log.error('[red]Secret not found[/]', extra={"markup": True})
+            exit(1)
 
-if args['secret_list']:
-    secret = SecretLister(sm)
-    for key, value in yaml.load(secret, Loader=yaml.FullLoader).items():
-        logging.info('Secret: '+key+' Description: '+value)
-    exit(0)
+    if args['secret_list']:
+        with Console().status("[bold green]Getting secrets...[/]", spinner="dots"):        
+            secret = SecretLister(sm)
+        for key, value in yaml.load(secret, Loader=yaml.FullLoader).items():
+            log.info('[bold green]Secret[/]: [yellow bold underline]{}[/] [bold green]Description:[/] [yellow bold underline]{}[/]'.format(key, value), extra={"markup": True})
+        exit(0)
 
-if args['name']:
-    secret_name = args['name']
-    logging.info('Reading secret: '+secret_name)
-    secret = SecretReader(sm,secret_name)
-elif args['secret']:
-    secret = args['secret']
-    #check if secret is a file
+    if args['name']:
+        secret_name = args['name']
+        log.info('[bold green]Reading secret:[/] [yellow bold underline]{}[/]'.format(secret_name),extra={"markup": True})
+        secret = SecretReader(sm,secret_name)
+    elif args['secret']:
+        secret = args['secret']
+        #check if secret is a file
+        try:
+            with open(secret, 'r') as f:
+                log.info('[dim green]Secret is a file[/] [underline green dim]{}[/]'.format(args['secret']),extra={"markup": True})
+                log.info('[green bold]Reading secret from file:[/] [green bold underline]{}[/]'.format(secret), extra={"markup": True})
+                secret = f.read()
+        except FileNotFoundError:
+            pass
+    else:
+        log.exception('[yellow bold] :warning: You need to provide a secret or a secret name :warning: [/]', extra={"markup": True})
+        exit(1)
+
     try:
-        with open(secret, 'r') as f:
-            logging.info('Reading secret from file: '+secret)
-            secret = f.read()
-    except FileNotFoundError:
-        pass
-else:
-    raise Exception('You need to provide a secret or a secret name')
+        secret_key = OneTimeSecretCreate(secret,TOKEN_OTS, EMAIL_OTS)
+    except:
+        log.exception('[red]Error creating secret.[/] Make sure you have set-up [code]TOKEN_OTS[/] & [code]EMAIL_OTS[/]', extra={"markup": True})
+        exit(1)
+
+    log.info('[green bold]Onetime secret:[/] [yellow bold underline]https://onetimesecret.com/secret/{}[/]'.format(secret_key), extra={"markup": True})
+    if args['user']:
+        user_id = SlackUserLookup(TOKEN_SLACK,args['user'])
+        log.info('[dim green]User id:[/] [dim yellow bold underline]]{}[/] [dim green]from user:[/] [bold yellow underline]{}[/]'.format(user_id,args['user']), extra={"markup": True})
+        try:
+            SlackMessage(TOKEN_SLACK,user_id,args['message'],secret_key)
+        except:
+            log.exception('[red]Error sending message to slack.[/] Make sure you have set-up [code]TOKEN_SLACK[/]', extra={"markup": True})
+            exit(1)
+        log.info('[green]Slack message sent to user:[/] [green bold underline]{}[/]'.format(args['user']), extra={"markup": True})
 
 
-secret_key = OneTimeSecretCreate(secret,TOKEN_OTS, EMAIL_OTS)
-logging.info('Onetime secret: https://onetimesecret.com/secret/'+secret_key)
-if args['user']:
-    user_id = SlackUserLookup(TOKEN_SLACK,args['user'])
-    logging.info('User id -> {} from user -> {}'.format(user_id,args['user']))
-    slack_message = SlackMessage(TOKEN_SLACK,user_id,args['message'],secret_key)
-    logging.debug(yaml.dump(slack_message, default_flow_style=False))
-    logging.info('Slack message sent to user -> {}'.format(args['user']))
+if __name__ == "__main__":
+    main()
